@@ -7,7 +7,7 @@ module Dockaroo
     end
 
     def load_for_host(host_name)
-      base = load_file(File.join(@base_dir, "secrets"))
+      base = @base_secrets ||= load_file(File.join(@base_dir, "secrets"))
       overrides = load_file(File.join(@base_dir, "secrets.#{host_name}"))
       base.merge(overrides)
     end
@@ -22,6 +22,7 @@ module Dockaroo
         line = line.strip
         next if line.empty? || line.start_with?("#")
 
+        line = line.delete_prefix("export ")
         key, value = line.split("=", 2)
         next unless key && value
 
