@@ -9,6 +9,7 @@
 
 # Project config (contains host-specific details)
 .dockaroo.yml
+.dockaroo/secrets*
 
 # Docker compose files (reference, not part of gem)
 compose.*.yml

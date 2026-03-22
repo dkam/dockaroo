@@ -2,10 +2,11 @@
 
 require "yaml"
 require_relative "config/host"
+require_relative "config/service"
 
 module Dockaroo
   class Config
-    attr_reader :path, :hosts
+    attr_reader :path, :hosts, :services
 
     def self.load(path = ".dockaroo.yml")
       raise ConfigError, "Config file not found: #{path}" unless File.exist?(path)
@@ -28,10 +29,35 @@ module Dockaroo
       @raw = raw
       @path = path
       @hosts = parse_hosts
+      @services = parse_services
     end
 
     def project
       @raw["project"]
+    end
+
+    def registry
+      @raw["registry"]
+    end
+
+    def image
+      @raw["image"]
+    end
+
+    def tag
+      @raw["tag"] || "latest"
+    end
+
+    def defaults
+      @raw["defaults"] || {}
+    end
+
+    def full_image(tag: nil)
+      "#{registry}/#{image}:#{tag || self.tag}"
+    end
+
+    def find_service(name)
+      @services.find { |s| s.name == name }
     end
 
     def save
@@ -80,6 +106,51 @@ module Dockaroo
           port: settings["port"] || 22
         )
       end
+    end
+
+    def parse_services
+      services_hash = @raw["services"] || {}
+      defs = defaults
+
+      services_hash.map do |name, settings|
+        settings ||= {}
+        merged = merge_defaults(settings, defs)
+
+        logging = if merged["logging"]
+                    { max_size: merged["logging"]["max_size"], max_file: merged["logging"]["max_file"] }
+                  end
+
+        Service.new(
+          name: name,
+          cmd: merged["cmd"],
+          hosts: Array(merged["hosts"]),
+          replicas: merged["replicas"] || 1,
+          network: merged["network"],
+          restart: merged["restart"],
+          environment: merged["environment"] || {},
+          volumes: Array(merged["volumes"]),
+          logging: logging
+        )
+      end
+    end
+
+    def merge_defaults(service_hash, defs)
+      merged = defs.dup
+
+      service_hash.each do |key, value|
+        case key
+        when "environment"
+          # Merge: defaults env + service env (service wins on conflict)
+          merged["environment"] = (merged["environment"] || {}).merge(value || {})
+        when "volumes"
+          # Merge: combined list
+          merged["volumes"] = Array(merged["volumes"]) + Array(value)
+        else
+          merged[key] = value
+        end
+      end
+
+      merged
     end
 
     def hosts_to_hash

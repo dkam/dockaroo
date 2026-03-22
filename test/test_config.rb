@@ -111,3 +111,105 @@ class TestConfig < Minitest::Test
     assert_nil config.find_host("nohost")
   end
 end
+
+class TestConfigServices < Minitest::Test
+  VALID_CONFIG = File.expand_path("fixtures/valid_config.yml", __dir__)
+
+  def test_top_level_accessors
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    assert_equal "booko", config.project
+    assert_equal "git.booko.info", config.registry
+    assert_equal "booko/booko", config.image
+    assert_equal "latest", config.tag
+  end
+
+  def test_full_image
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    assert_equal "git.booko.info/booko/booko:latest", config.full_image
+    assert_equal "git.booko.info/booko/booko:abc123", config.full_image(tag: "abc123")
+  end
+
+  def test_parse_services
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    assert_equal 4, config.services.size
+  end
+
+  def test_service_basic_fields
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    grabber = config.find_service("grabber")
+
+    assert_equal "grabber", grabber.name
+    assert_equal "bundle exec bin/booko -W", grabber.cmd
+    assert_equal %w[grabber01 grabber02], grabber.hosts
+    assert_equal 4, grabber.replicas
+    assert grabber.replicated?
+  end
+
+  def test_service_single_replica
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    scheduler = config.find_service("scheduler")
+
+    assert_equal 1, scheduler.replicas
+    refute scheduler.replicated?
+  end
+
+  def test_defaults_merged_into_service
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    grabber = config.find_service("grabber")
+
+    assert_equal "host", grabber.network
+    assert_equal "on-failure", grabber.restart
+    assert_equal({ max_size: "50m", max_file: 5 }, grabber.logging)
+    assert_includes grabber.volumes, "./log:/rails/log"
+  end
+
+  def test_environment_merged
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    amazon = config.find_service("amazon")
+
+    # Has defaults env
+    assert_equal "2", amazon.environment["MALLOC_ARENA_MAX"]
+    assert_equal "1", amazon.environment["RUBY_YJIT_ENABLE"]
+    # Plus service-specific env
+    assert_equal "true", amazon.environment["AMAZON_SPECIFIC"]
+  end
+
+  def test_volumes_merged
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    amazon = config.find_service("amazon")
+
+    assert_includes amazon.volumes, "./log:/rails/log"    # from defaults
+    assert_includes amazon.volumes, "./data:/data"         # from service
+    assert_equal 2, amazon.volumes.size
+  end
+
+  def test_container_naming_replicated
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    grabber = config.find_service("grabber")
+
+    assert_equal "booko-grabber-1", grabber.container_name("booko", 1)
+    assert_equal "booko-grabber-4", grabber.container_name("booko", 4)
+  end
+
+  def test_container_naming_single
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    scheduler = config.find_service("scheduler")
+
+    assert_equal "booko-scheduler", scheduler.container_name("booko")
+  end
+
+  def test_find_service_returns_nil_for_unknown
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    assert_nil config.find_service("nonexistent")
+  end
+
+  def test_empty_services
+    config = Dockaroo::Config.new
+    assert_equal [], config.services
+  end
+
+  def test_default_tag
+    config = Dockaroo::Config.new(raw: { "image" => "myapp" })
+    assert_equal "latest", config.tag
+  end
+end
