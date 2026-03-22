@@ -44,7 +44,6 @@ A service definition like:
 defaults:
   network: host
   restart: on-failure
-  env_file: .env
   environment:
     MALLOC_ARENA_MAX: "2"
   volumes:
@@ -59,7 +58,7 @@ services:
     replicas: 4
 ```
 
-Generates (for replica 2):
+Generates (for replica 2 on grabber02):
 
 ```bash
 docker run \
@@ -67,7 +66,7 @@ docker run \
   --name booko-grabber-2 \
   --network host \
   --restart on-failure \
-  --env-file .env \
+  --env-file .dockaroo/env/grabber02.env \
   --env MALLOC_ARENA_MAX=2 \
   --env DOCKAROO_PROJECT=booko \
   --env DOCKAROO_SERVICE=grabber \
@@ -81,16 +80,19 @@ docker run \
   bundle exec bin/booko -W
 ```
 
+The `--env-file` points to a secrets file uploaded to each host at deploy time (see Deploy Strategy). Non-secret `environment` values from `.dockaroo.yml` are passed as individual `--env` flags.
+
 ## Deploy Strategy
 
 Dockaroo uses a simple stop-then-start strategy per service:
 
-1. Pull new image on host
-2. For each replica:
+1. Upload merged secrets file to host (`.dockaroo/env/{host}.env`, mode 0600)
+2. `docker login` + `docker pull` the image on each host
+3. For each service on each host, for each replica:
    a. `docker stop {container}` (with timeout for graceful shutdown)
    b. `docker rm {container}`
    c. `docker run ...` with new image
-3. Verify container is running
+4. Verify container is running
 
 This means brief downtime per container during deploys. For worker processes pulling from a queue, this is acceptable — jobs wait in the queue for a few seconds while the container restarts. Other replicas (if any) continue processing throughout.
 
