@@ -33,5 +33,18 @@ module Dockaroo
       raise SSHError, "Failed to connect to #{@sshkit_host.hostname}: #{e.message}"
     end
 
+    def upload(content, remote_path, mode: nil)
+      io = content.is_a?(StringIO) ? content : StringIO.new(content)
+
+      backend = SSHKit.config.backend.new(@sshkit_host) do
+        upload!(io, remote_path)
+        execute(:chmod, mode, remote_path) if mode
+      end
+      backend.run
+    rescue SSHKit::Runner::ExecuteError, Net::SSH::Exception, Errno::ECONNREFUSED,
+           Errno::EHOSTUNREACH, Errno::ETIMEDOUT, SocketError, IOError => e
+      raise SSHError, "Failed to upload to #{@sshkit_host.hostname}: #{e.message}"
+    end
+
   end
 end

@@ -32,7 +32,7 @@ class TestCLI < Minitest::Test
   end
 
   def test_unimplemented_commands_are_recognized
-    %w[deploy logs scale].each do |cmd|
+    %w[logs scale].each do |cmd|
       _, err = capture_io do
         Dockaroo::CLI.start([cmd])
       rescue SystemExit

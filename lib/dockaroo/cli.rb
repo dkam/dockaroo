@@ -50,6 +50,8 @@ module Dockaroo
         Commands::Stop.run(args)
       when "restart"
         Commands::Restart.run(args)
+      when "deploy"
+        Commands::Deploy.run(args)
       when "init"
         Commands::Init.run(args)
       else

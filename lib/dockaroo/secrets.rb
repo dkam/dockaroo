@@ -6,10 +6,13 @@ module Dockaroo
       @base_dir = base_dir
     end
 
+    def load_base
+      @base_secrets ||= load_file(File.join(@base_dir, "secrets"))
+    end
+
     def load_for_host(host_name)
-      base = @base_secrets ||= load_file(File.join(@base_dir, "secrets"))
       overrides = load_file(File.join(@base_dir, "secrets.#{host_name}"))
-      base.merge(overrides)
+      load_base.merge(overrides)
     end
 
     private
