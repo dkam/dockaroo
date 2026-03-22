@@ -42,6 +42,14 @@ module Dockaroo
         Commands::Host.run(args)
       when "check"
         Commands::Check.run(args)
+      when "status"
+        Commands::Status.run(args)
+      when "start"
+        Commands::Start.run(args)
+      when "stop"
+        Commands::Stop.run(args)
+      when "restart"
+        Commands::Restart.run(args)
       when "init"
         Commands::Init.run(args)
       else
