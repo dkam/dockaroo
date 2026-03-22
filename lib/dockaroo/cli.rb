@@ -29,8 +29,15 @@ module Dockaroo
     private
 
     def dispatch(command, args)
-      $stderr.puts "dockaroo #{command}: not yet implemented"
-      exit 1
+      case command
+      when "host"
+        Commands::Host.run(args)
+      when "init"
+        Commands::Init.run(args)
+      else
+        $stderr.puts "dockaroo #{command}: not yet implemented"
+        exit 1
+      end
     end
 
     def usage

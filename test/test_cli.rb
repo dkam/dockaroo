@@ -33,8 +33,8 @@ class TestCLI < Minitest::Test
     assert_includes err, "Usage:"
   end
 
-  def test_known_commands_are_recognized
-    %w[status deploy logs stop start restart scale check host init].each do |cmd|
+  def test_unimplemented_commands_are_recognized
+    %w[status deploy logs stop start restart scale check].each do |cmd|
       _, err = capture_io do
         Dockaroo::CLI.start([cmd])
       rescue SystemExit
@@ -42,5 +42,14 @@ class TestCLI < Minitest::Test
       end
       assert_includes err, "not yet implemented", "Command '#{cmd}' should be recognized"
     end
+  end
+
+  def test_host_command_dispatches
+    _, err = capture_io do
+      Dockaroo::CLI.start(["host"])
+    rescue SystemExit
+      # expected — no subcommand given
+    end
+    assert_includes err, "Subcommands:"
   end
 end

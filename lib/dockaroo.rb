@@ -7,4 +7,8 @@ module Dockaroo
 end
 
 require_relative "dockaroo/errors"
+require_relative "dockaroo/config"
+require_relative "dockaroo/ssh_executor"
+require_relative "dockaroo/commands/host"
+require_relative "dockaroo/commands/init"
 require_relative "dockaroo/cli"

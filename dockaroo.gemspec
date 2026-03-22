@@ -33,5 +33,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "bubbletea"
   spec.add_dependency "lipgloss"
   spec.add_dependency "bubbles"
+  spec.add_dependency "logger"
   spec.add_dependency "net-ssh"
 end

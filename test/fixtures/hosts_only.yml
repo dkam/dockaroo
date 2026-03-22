@@ -1,0 +1,11 @@
+project: testproject
+registry: registry.example.com
+image: myapp/myapp
+
+hosts:
+  grabber01:
+    user: deploy
+  grabber02:
+    user: deploy
+    port: 2222
+  webhost:
