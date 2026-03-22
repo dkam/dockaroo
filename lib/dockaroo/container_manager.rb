@@ -66,7 +66,7 @@ module Dockaroo
     # Query container status on a host, returns array of hashes
     def status(host:)
       executor = SSHExecutor.new(host: host.name, user: host.user, port: host.port)
-      result = executor.run("docker ps -a --format \"{{json .}}\" --filter \"name=^#{@config.project}-\"")
+      result = executor.run("docker ps --format \"{{json .}}\" --filter \"name=#{@config.project}-\"")
       return [] unless result.success?
 
       parse_docker_ps(result.stdout)
