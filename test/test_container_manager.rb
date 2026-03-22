@@ -139,34 +139,6 @@ class TestContainerManager < Minitest::Test
     assert_includes commands_run.first, "docker rm booko-grabber-1"
   end
 
-  def test_status_parses_docker_ps
-    docker_ps_output = [
-      '{"Names":"booko-grabber-1","State":"running","Status":"Up 2 hours","Image":"git.booko.info/booko/booko:abc123","CreatedAt":"2024-01-01","RunningFor":"2 hours ago"}',
-      '{"Names":"booko-scheduler","State":"running","Status":"Up 5 minutes","Image":"git.booko.info/booko/booko:abc123","CreatedAt":"2024-01-01","RunningFor":"5 minutes ago"}'
-    ].join("\n")
-
-    host = @config.find_host("grabber01")
-    fake_executor = Object.new
-    fake_executor.define_singleton_method(:run) { |_cmd| Dockaroo::SSHResult.new(stdout: docker_ps_output, stderr: "", exit_status: 0) }
-
-    containers = nil
-    Dockaroo::SSHExecutor.stub(:new, fake_executor) do
-      containers = @manager.status(host: host)
-    end
-
-    assert_equal 2, containers.size
-
-    grabber = containers.find { |c| c[:service] == "grabber" }
-    assert_equal "booko-grabber-1", grabber[:name]
-    assert_equal 1, grabber[:replica]
-    assert_equal "running", grabber[:state]
-    assert_equal "abc123", grabber[:image_tag]
-
-    scheduler = containers.find { |c| c[:service] == "scheduler" }
-    assert_equal "booko-scheduler", scheduler[:name]
-    assert_nil scheduler[:replica]
-  end
-
   def test_status_empty_output
     host = @config.find_host("grabber01")
     fake_executor = Object.new
@@ -178,5 +150,114 @@ class TestContainerManager < Minitest::Test
     end
 
     assert_equal [], containers
+  end
+end
+
+# Tests using real docker ps output from grabber02
+class TestContainerManagerRealData < Minitest::Test
+  VALID_CONFIG = File.expand_path("fixtures/valid_config.yml", __dir__)
+  DOCKER_PS_FIXTURE = File.expand_path("fixtures/docker_ps_grabber02.json", __dir__)
+
+  def setup
+    @config = Dockaroo::Config.load(VALID_CONFIG)
+    @tmpdir = Dir.mktmpdir
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: @config, secrets: secrets)
+    @manager = Dockaroo::ContainerManager.new(config: @config, env_builder: env_builder)
+    @fixture_data = File.read(DOCKER_PS_FIXTURE)
+  end
+
+  def teardown
+    FileUtils.rm_rf(@tmpdir)
+  end
+
+  def parsed_containers
+    @manager.send(:parse_docker_ps, @fixture_data)
+  end
+
+  def test_parses_all_containers
+    containers = parsed_containers
+    # 17 lines in fixture, all should parse (they all start with booko-)
+    assert_equal 17, containers.size
+  end
+
+  def test_parses_compose_managed_containers
+    containers = parsed_containers
+    scheduler = containers.find { |c| c[:name] == "booko-scheduler-1" }
+
+    assert_equal "scheduler", scheduler[:service]
+    assert_equal 1, scheduler[:replica]
+    assert_equal "running", scheduler[:state]
+    assert_equal "latest", scheduler[:image_tag]
+    assert_equal "3 hours ago", scheduler[:running_for]
+  end
+
+  def test_parses_replicated_grabber
+    containers = parsed_containers
+    grabbers = containers.select { |c| c[:service] == "grabber" }
+
+    assert_equal 4, grabbers.size
+    assert_equal [1, 2, 3, 4], grabbers.map { |c| c[:replica] }.sort
+  end
+
+  def test_parses_restarting_state
+    containers = parsed_containers
+    grabber2 = containers.find { |c| c[:name] == "booko-grabber-2" }
+
+    assert_equal "restarting", grabber2[:state]
+  end
+
+  def test_parses_active_job_with_underscore
+    containers = parsed_containers
+    active_job = containers.find { |c| c[:name] == "booko-active_job-1" }
+
+    assert_equal "active_job", active_job[:service]
+    assert_equal 1, active_job[:replica]
+    assert_equal "running", active_job[:state]
+  end
+
+  def test_parses_kamal_leftover_containers
+    containers = parsed_containers
+    kamal = containers.select { |c| c[:name].include?("462dd140f3") }
+
+    # These parse but with ugly service names — they're Kamal leftovers
+    assert kamal.size > 0
+    assert(kamal.all? { |c| c[:state] == "exited" })
+  end
+
+  def test_parses_compose_run_oneoff_containers
+    containers = parsed_containers
+    oneoffs = containers.select { |c| c[:name].include?("-run-") }
+
+    assert_equal 2, oneoffs.size
+    assert(oneoffs.all? { |c| c[:state] == "exited" })
+  end
+
+  def test_parses_old_jobs_container
+    containers = parsed_containers
+    jobs = containers.find { |c| c[:name] == "booko-jobs-1" }
+
+    assert_equal "jobs", jobs[:service]
+    assert_equal 1, jobs[:replica]
+    assert_equal "exited", jobs[:state]
+    assert_equal "12 months ago", jobs[:running_for]
+  end
+
+  def test_image_tag_extraction
+    containers = parsed_containers
+    scheduler = containers.find { |c| c[:name] == "booko-scheduler-1" }
+    assert_equal "latest", scheduler[:image_tag]
+
+    kamal = containers.find { |c| c[:name].include?("g02_worker3-grabber02-462dd") && !c[:name].include?("replaced") }
+    assert_equal "462dd140f3291658c6b67cfe4fceca0a1afcaf00", kamal[:image_tag]
+  end
+
+  def test_running_containers_only
+    containers = parsed_containers
+    running = containers.select { |c| c[:state] == "running" }
+
+    assert_equal 6, running.size
+    services = running.map { |c| c[:service] }.uniq.sort
+    assert_equal %w[active_job amazon grabber scheduler], services
   end
 end

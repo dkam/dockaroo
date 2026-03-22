@@ -7,11 +7,12 @@
 | 0 | Foundation | `dockaroo --version` runs, CLI routing works | Done |
 | 1a | SSH + Config + CLI Hosts | SSH executor, config parsing (hosts), `dockaroo host add/remove/list/test` | Done |
 | 1b | TUI Shell | Interactive TUI with host list, add/edit host forms, SSH test from TUI | Done |
-| 2 | Host Checks | `dockaroo check` verifies Docker prerequisites on remote hosts | Next |
-| 3 | Configuration (services) | Full `.dockaroo.yml` parsing (services, defaults merging, validation) | |
-| 4 | Container Management | `docker run` command generation, status, start/stop/restart | |
+| 2 | Host Checks | `dockaroo check` verifies Docker prerequisites on remote hosts | Done |
+| 3 | Configuration + Secrets | Service parsing, defaults merging, `.dockaroo/secrets` loading | Done |
+| 4 | Container Management | `docker run` command generation, status, start/stop/restart | Done |
 | 5 | Deploy Workflow | Full deploy pipeline including registry login/pull | |
 | 6 | Logs, Scaling | Log tailing, replica scaling, remaining commands | |
+| 7 | JSON Output | `--json` flag for machine-readable output (AI agents, scripts) | |
 
 ---
 
@@ -171,6 +172,19 @@
 **Tests**:
 - `test/commands/test_logs.rb` — Assert correct `docker logs` command construction.
 - `test/commands/test_scale.rb` — Test scale up (new containers) and scale down (remove excess).
+
+---
+
+## Phase 7: JSON Output
+
+**Goal**: Add `--json` flag to CLI commands for machine-readable output. Enables AI agents and scripts to consume Dockaroo output programmatically.
+
+**Commands**:
+- `dockaroo status --json` — array of container objects
+- `dockaroo check --json` — array of check results per host
+- `dockaroo host list --json` — array of host objects
+
+**Implementation**: The data is already structured internally — just serialize to JSON instead of formatting tables when `--json` is passed.
 
 ---
 
