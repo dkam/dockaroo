@@ -17,7 +17,15 @@ module Dockaroo
       when "--version", "-v"
         puts "dockaroo #{VERSION}"
       when nil
-        puts "Dockaroo TUI — coming soon"
+        require "bubbletea"
+        require "lipgloss"
+        require "bubbles"
+        require_relative "tui/messages"
+        require_relative "tui/screens/hosts"
+        require_relative "tui/screens/host_form"
+        require_relative "tui/app"
+        app = TUI::App.new
+        Bubbletea.run(app, alt_screen: true)
       when *COMMANDS
         dispatch(@args.first, @args[1..])
       else
