@@ -109,7 +109,6 @@ module Dockaroo
         print "Testing SSH connection to #{name}... "
         executor = SSHExecutor.new(host: host.name, user: host.user, port: host.port)
         result = executor.run("hostname")
-        executor.close
         puts "OK (#{result.stdout})"
       rescue Dockaroo::SSHError => e
         puts "FAILED"
@@ -122,11 +121,9 @@ module Dockaroo
       end
 
       def load_or_create_config
-        if Config.exists?(@config_path)
-          Config.load(@config_path)
-        else
-          Config.new(path: @config_path)
-        end
+        Config.load(@config_path)
+      rescue Dockaroo::ConfigError
+        Config.new(path: @config_path)
       end
 
       def host_usage
