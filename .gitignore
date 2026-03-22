@@ -6,3 +6,15 @@
 /pkg/
 /spec/reports/
 /tmp/
+
+# Project config (contains host-specific details)
+.dockaroo.yml
+
+# Docker compose files (reference, not part of gem)
+compose.*.yml
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
