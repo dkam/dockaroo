@@ -91,9 +91,7 @@ module Dockaroo
       end
 
       def load_config
-        Config.load(@config_path)
-      rescue ConfigError
-        Config.new(path: @config_path)
+        Config.load_or_create(@config_path)
       end
 
       def update_screen_height

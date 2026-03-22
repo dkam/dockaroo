@@ -14,6 +14,12 @@ module Dockaroo
       new(raw: raw, path: path)
     end
 
+    def self.load_or_create(path = ".dockaroo.yml")
+      load(path)
+    rescue ConfigError
+      new(path: path)
+    end
+
     def self.exists?(path = ".dockaroo.yml")
       File.exist?(path)
     end

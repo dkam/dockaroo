@@ -2,17 +2,16 @@
 
 ## Phases Overview
 
-| Phase | Name | Key Deliverable | Depends On |
-|-------|------|----------------|------------|
-| 0 | Foundation | `dockaroo --version` runs, CLI routing works | — |
-| 1a | SSH + Config + CLI Hosts | SSH executor, config parsing (hosts), `dockaroo host add/remove/list/test` | Phase 0 |
-| 1b | TUI Shell | Interactive TUI with host list, add/edit host forms, SSH test from TUI | Phase 1a |
-| 2 | Configuration (services) | Full `.dockaroo.yml` parsing (services, defaults), `dockaroo init` | Phase 1a |
-| 3 | Host Checks | `dockaroo check` verifies prerequisites | Phases 1a, 2 |
-| 4 | Registry | `docker login` + `docker pull` on remote hosts | Phases 1a, 2 |
-| 5 | Container Management | `docker run`, status, start/stop/restart | Phases 2, 4 |
-| 6 | Deploy Workflow | Full `dockaroo deploy` pipeline | Phase 5 |
-| 7 | Logs, Scaling | Remaining commands, feature parity | Phase 6 |
+| Phase | Name | Key Deliverable | Status |
+|-------|------|----------------|--------|
+| 0 | Foundation | `dockaroo --version` runs, CLI routing works | Done |
+| 1a | SSH + Config + CLI Hosts | SSH executor, config parsing (hosts), `dockaroo host add/remove/list/test` | Done |
+| 1b | TUI Shell | Interactive TUI with host list, add/edit host forms, SSH test from TUI | Done |
+| 2 | Host Checks | `dockaroo check` verifies Docker prerequisites on remote hosts | Next |
+| 3 | Configuration (services) | Full `.dockaroo.yml` parsing (services, defaults merging, validation) | |
+| 4 | Container Management | `docker run` command generation, status, start/stop/restart | |
+| 5 | Deploy Workflow | Full deploy pipeline including registry login/pull | |
+| 6 | Logs, Scaling | Log tailing, replica scaling, remaining commands | |
 
 ---
 
@@ -66,32 +65,20 @@
 
 ---
 
-## Phase 2: Configuration (services)
+## Phase 2: Host Checks
 
-**Goal**: Extend config parsing to handle the full `.dockaroo.yml` — services, defaults merging, validation. Add `dockaroo init`.
+**Goal**: Implement `dockaroo check`. SSH to each host and verify Docker prerequisites. Display in CLI and TUI.
 
-**Deliverable**: `dockaroo init` generates a template config. Services parsed with defaults merged. TUI and CLI read full config.
+**Deliverable**: `dockaroo check [host]` outputs check results. Only needs SSH + host config (both done).
 
-**Files**:
-- `lib/dockaroo/config/service.rb` — Data class: `name`, `cmd`, `hosts`, `replicas`, `network`, `restart`, `env_file`, `environment`, `volumes`, `logging`.
-- `lib/dockaroo/commands/init.rb` — Generates template `.dockaroo.yml`.
-- `lib/dockaroo/config.rb` — Extended with `#services`, `#defaults`, defaults-into-services merging, validation.
-
-**Tests**:
-- `test/test_config.rb` — Extended: parse services, assert defaults merge, validate required fields.
-- `test/commands/test_init.rb` — Assert init creates file with expected structure.
-- `test/fixtures/valid_config.yml`, `test/fixtures/missing_project.yml`, `test/fixtures/no_services.yml`
-
----
-
-## Phase 3: Host Checks
-
-**Goal**: Implement `dockaroo check`. SSH to each host and verify prerequisites. Display in CLI and TUI.
-
-**Deliverable**: `dockaroo check [host]` outputs check results (SSH, Docker installed, docker group, disk space).
+**Checks**:
+1. SSH connection — can connect
+2. Docker installed — `docker --version`
+3. Docker group — user in `docker` group (or root)
+4. Disk space — warn if low
 
 **Files**:
-- `lib/dockaroo/host_checker.rb` — Prerequisite checks via SSH: `#check_docker_installed` (runs `docker --version`), `#check_docker_group` (runs `id -nG`), `#check_disk_space` (runs `df`). Each returns status + detail.
+- `lib/dockaroo/host_checker.rb` — Prerequisite checks via SSH. Each returns status + detail.
 - `lib/dockaroo/commands/check.rb` — CLI handler, formats output.
 - `lib/dockaroo/tui/screens/check.rb` — TUI check results screen.
 
@@ -100,23 +87,23 @@
 
 ---
 
-## Phase 4: Registry
+## Phase 3: Configuration (services)
 
-**Goal**: Handle `docker login` and `docker pull` on remote hosts.
+**Goal**: Extend config parsing to handle the full `.dockaroo.yml` — services, defaults merging, validation.
 
-**Deliverable**: Registry login works via env vars, config, or interactive prompt. Images can be pulled to remote hosts. `dockaroo check` also verifies registry access.
+**Deliverable**: Services parsed with defaults merged. `dockaroo init` already done.
 
 **Files**:
-- `lib/dockaroo/registry_manager.rb` — `docker login` and `docker pull` over SSH. Credential resolution: env vars → config → prompt.
-- `lib/dockaroo/credentials.rb` — Credential resolution logic.
+- `lib/dockaroo/config/service.rb` — Data class: `name`, `cmd`, `hosts`, `replicas`, `network`, `restart`, `env_file`, `environment`, `volumes`, `logging`.
+- `lib/dockaroo/config.rb` — Extended with `#services`, `#defaults`, defaults-into-services merging, validation.
 
 **Tests**:
-- `test/test_registry_manager.rb` — Mock SSH, test login command generation.
-- `test/test_credentials.rb` — Test env var lookup, config lookup, fallback order.
+- `test/test_config.rb` — Extended: parse services, assert defaults merge, validate required fields.
+- `test/fixtures/valid_config.yml`, `test/fixtures/missing_project.yml`, `test/fixtures/no_services.yml`
 
 ---
 
-## Phase 5: Container Management
+## Phase 4: Container Management
 
 **Goal**: Core container lifecycle. Translate service definitions into `docker run` commands. Start/stop/restart/status.
 
@@ -137,13 +124,15 @@
 
 ---
 
-## Phase 6: Deploy Workflow
+## Phase 5: Deploy Workflow
 
-**Goal**: Full deploy pipeline: login → pull → stop old → remove old → run new → verify.
+**Goal**: Full deploy pipeline including registry login/pull: login → pull → stop old → remove old → run new → verify.
 
 **Deliverable**: `dockaroo deploy [host] [--tag TAG] [--service SVC] [--skip-pull]` works. TUI shows deploy progress with spinners.
 
 **Files**:
+- `lib/dockaroo/registry_manager.rb` — `docker login` and `docker pull` over SSH. Credential resolution: env vars → config → prompt.
+- `lib/dockaroo/credentials.rb` — Credential resolution logic.
 - `lib/dockaroo/deployer.rb` — Orchestrates deploy: for each host, login, pull, then per service: stop → remove → start → verify. Accepts host/service/tag filters. Reports progress via callbacks.
 - `lib/dockaroo/commands/deploy.rb` — CLI handler.
 - `lib/dockaroo/tui/screens/deploy.rb` — Deploy progress screen (pending/pulling/stopping/starting/done/failed per host+service).
@@ -151,11 +140,13 @@
 **Strategy**: Stop-then-start per replica (sequential). Rolling deploys (one replica at a time) noted as future enhancement.
 
 **Tests**:
+- `test/test_registry_manager.rb` — Mock SSH, test login command generation.
+- `test/test_credentials.rb` — Test env var lookup, config lookup, fallback order.
 - `test/test_deployer.rb` — Mock SSH, assert exact command sequence (login, pull, stop, rm, run, verify).
 
 ---
 
-## Phase 7: Logs, Scaling
+## Phase 6: Logs, Scaling
 
 **Goal**: Complete remaining commands for full feature parity with `docs/commands.md`.
 

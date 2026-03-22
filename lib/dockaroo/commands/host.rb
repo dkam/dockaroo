@@ -121,9 +121,7 @@ module Dockaroo
       end
 
       def load_or_create_config
-        Config.load(@config_path)
-      rescue Dockaroo::ConfigError
-        Config.new(path: @config_path)
+        Config.load_or_create(@config_path)
       end
 
       def host_usage
