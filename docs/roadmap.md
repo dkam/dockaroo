@@ -177,58 +177,33 @@ lib/
     config.rb
     config/
       host.rb
-      service.rb
+      service.rb              # Phase 3
     ssh_executor.rb
-    ssh_result.rb
-    host_checker.rb
-    registry_manager.rb
-    credentials.rb
-    container_manager.rb
-    container_status.rb
-    deployer.rb
+    host_checker.rb            # Phase 2
+    registry_manager.rb        # Phase 5
+    credentials.rb             # Phase 5
+    container_manager.rb       # Phase 4
+    container_status.rb        # Phase 4
+    deployer.rb                # Phase 5
     commands/
       init.rb
-      check.rb
-      status.rb
-      deploy.rb
-      start.rb
-      stop.rb
-      restart.rb
-      logs.rb
-      scale.rb
+      check.rb                 # Phase 2
+      status.rb                # Phase 4
+      deploy.rb                # Phase 5
+      start.rb                 # Phase 4
+      stop.rb                  # Phase 4
+      restart.rb               # Phase 4
+      logs.rb                  # Phase 6
+      scale.rb                 # Phase 6
       host.rb
     tui/
       app.rb
       messages.rb
       screens/
         hosts.rb
-        status.rb
-        check.rb
-        deploy.rb
-        logs.rb
-test/
-  test_helper.rb
-  test_cli.rb
-  test_config.rb
-  test_ssh_executor.rb
-  test_host_checker.rb
-  test_registry_manager.rb
-  test_credentials.rb
-  test_container_manager.rb
-  test_container_status.rb
-  test_deployer.rb
-  commands/
-    test_init.rb
-    test_check.rb
-    test_status.rb
-    test_deploy.rb
-    test_logs.rb
-    test_scale.rb
-    test_host.rb
-  tui/
-    test_app.rb
-  fixtures/
-    valid_config.yml
-    missing_project.yml
-    no_services.yml
+        host_form.rb
+        status.rb              # Phase 4
+        check.rb               # Phase 2
+        deploy.rb              # Phase 5
+        logs.rb                # Phase 6
 ```
