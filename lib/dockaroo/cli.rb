@@ -40,6 +40,8 @@ module Dockaroo
       case command
       when "host"
         Commands::Host.run(args)
+      when "check"
+        Commands::Check.run(args)
       when "init"
         Commands::Init.run(args)
       else

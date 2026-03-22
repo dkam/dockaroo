@@ -13,6 +13,16 @@ module Dockaroo
       end
     end
 
+    class HostCheckResult < Bubbletea::Message
+      attr_reader :host_name, :results
+
+      def initialize(host_name:, results:)
+        super()
+        @host_name = host_name
+        @results = results
+      end
+    end
+
     class ScreenTransition < Bubbletea::Message
       attr_reader :screen, :params
 

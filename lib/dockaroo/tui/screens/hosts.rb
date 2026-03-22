@@ -29,6 +29,8 @@ module Dockaroo
             return handle_key(message)
           when SSHTestResult
             return handle_ssh_result(message)
+          when HostCheckResult
+            return handle_check_result(message)
           end
 
           @table, cmd = @table.update(message)
@@ -44,7 +46,7 @@ module Dockaroo
             host = selected_host
             lines << "  Delete #{host&.name}? (y/n)"
           else
-            lines << "  a:add  e:edit  d:delete  t:test ssh  q:quit"
+            lines << "  a:add  e:edit  d:delete  t:test ssh  c:check  q:quit"
           end
 
           lines.join("\n")
@@ -95,6 +97,25 @@ module Dockaroo
             }
 
             [self, cmd, nil]
+          when "c"
+            host = selected_host
+            return [self, nil, nil] unless host
+
+            @statuses[host.name] = "checking..."
+            @table.rows = build_rows
+
+            cmd = proc {
+              begin
+                checker = HostChecker.new(host: host.name, user: host.user, port: host.port)
+                results = checker.check_all
+                HostCheckResult.new(host_name: host.name, results: results)
+              rescue SSHError => e
+                failed = [HostChecker::CheckResult.new(name: "SSH connection", status: :error, detail: e.message)]
+                HostCheckResult.new(host_name: host.name, results: failed)
+              end
+            }
+
+            [self, cmd, nil]
           else
             @table, cmd = @table.update(message)
             [self, cmd, nil]
@@ -119,12 +140,19 @@ module Dockaroo
           end
         end
 
+        def handle_check_result(message)
+          problems = message.results.select { |r| r.status != :ok }
+          @statuses[message.host_name] = if problems.empty?
+                                           "ok"
+                                         else
+                                           problems.first.detail
+                                         end
+          @table.rows = build_rows
+          [self, nil, nil]
+        end
+
         def handle_ssh_result(message)
-          if message.success
-            @statuses[message.host_name] = "ok (#{message.detail})"
-          else
-            @statuses[message.host_name] = "error"
-          end
+          @statuses[message.host_name] = message.success ? "ssh ok" : "ssh error"
           @table.rows = build_rows
           [self, nil, nil]
         end
