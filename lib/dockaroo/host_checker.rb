@@ -3,10 +3,8 @@
 module Dockaroo
   class HostChecker
     CheckResult = Data.define(:name, :status, :detail)
-    # status: :ok, :warning, :error
 
     def initialize(host:, user: nil, port: 22, executor: nil)
-      @host = host
       @executor = executor || SSHExecutor.new(host: host, user: user, port: port)
     end
 
