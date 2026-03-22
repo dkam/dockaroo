@@ -87,18 +87,27 @@
 
 ---
 
-## Phase 3: Configuration (services)
+## Phase 3: Configuration (services) + Secrets
 
-**Goal**: Extend config parsing to handle the full `.dockaroo.yml` — services, defaults merging, validation.
+**Goal**: Extend config parsing to handle the full `.dockaroo.yml` — services, defaults merging, validation. Add secrets loading from `.dockaroo/secrets` files.
 
-**Deliverable**: Services parsed with defaults merged. `dockaroo init` already done.
+**Deliverable**: Services parsed with defaults merged. Secrets loaded and merged per-host. `dockaroo init` already done.
 
 **Files**:
-- `lib/dockaroo/config/service.rb` — Data class: `name`, `cmd`, `hosts`, `replicas`, `network`, `restart`, `env_file`, `environment`, `volumes`, `logging`.
+- `lib/dockaroo/config/service.rb` — Data class: `name`, `cmd`, `hosts`, `replicas`, `network`, `restart`, `environment`, `volumes`, `logging`.
 - `lib/dockaroo/config.rb` — Extended with `#services`, `#defaults`, defaults-into-services merging, validation.
+- `lib/dockaroo/secrets.rb` — Loads `.dockaroo/secrets` (base) and `.dockaroo/secrets.{host}` (overrides). Dotenv format. Merges in order: base secrets → host secrets → defaults.environment → service.environment.
+- `lib/dockaroo/env_file.rb` — Renders merged env vars into Docker-compatible env file format for upload.
+
+**Merge order** (later overrides earlier):
+1. `.dockaroo/secrets` — base secrets
+2. `.dockaroo/secrets.{host}` — host-specific secret overrides
+3. `defaults.environment` — non-secret defaults from YAML
+4. `services.{service}.environment` — non-secret per-service values
 
 **Tests**:
 - `test/test_config.rb` — Extended: parse services, assert defaults merge, validate required fields.
+- `test/test_secrets.rb` — Load base secrets, host overrides, merge order, missing files handled gracefully.
 - `test/fixtures/valid_config.yml`, `test/fixtures/missing_project.yml`, `test/fixtures/no_services.yml`
 
 ---

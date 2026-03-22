@@ -14,7 +14,6 @@ tag: latest              # default tag, can be overridden at deploy time
 defaults:
   network: host
   restart: on-failure
-  env_file: .env
   environment:
     MALLOC_ARENA_MAX: "2"
     RUBY_YJIT_ENABLE: "1"
@@ -69,15 +68,14 @@ The `defaults` block sets values inherited by all services. Any service can over
 |---|---|
 | `network` | Docker network mode (`host`, `bridge`, or a named network) |
 | `restart` | Restart policy (`no`, `on-failure`, `unless-stopped`, `always`) |
-| `env_file` | Path to env file on the remote host |
-| `environment` | Key-value environment variables |
+| `environment` | Key-value environment variables (non-secret) |
 | `volumes` | Volume mounts |
 | `logging.max_size` | Max log file size |
 | `logging.max_file` | Max number of log files |
 
 ### Hosts
 
-Each host entry specifies connection details.
+Each host entry specifies connection details and optional per-host environment overrides.
 
 | Key | Required | Description |
 |---|---|---|
@@ -95,7 +93,6 @@ Each service defines what to run and where.
 | `replicas` | no | Number of identical containers per host (default: 1) |
 | `network` | no | Override default network mode |
 | `restart` | no | Override default restart policy |
-| `env_file` | no | Override default env file |
 | `environment` | no | Additional/override environment variables |
 | `volumes` | no | Additional/override volume mounts |
 
@@ -111,9 +108,55 @@ Examples:
 
 Services with `replicas: 1` (or no replicas key) omit the number suffix.
 
-## Environment Variables
+## Secrets
 
-Dockaroo injects these automatically:
+Secrets (database URLs, API keys, passwords) are stored locally in `.dockaroo/secrets` files and uploaded to each host at deploy time. These files use dotenv format and should be added to `.gitignore`.
+
+### File structure
+
+```
+.dockaroo/secrets              # shared across all hosts
+.dockaroo/secrets.grabber01    # host-specific overrides (optional)
+.dockaroo/secrets.grabber02    # host-specific overrides (optional)
+```
+
+### Example
+
+```bash
+# .dockaroo/secrets — shared base
+DATABASE_URL=postgres://user:password@db:5432/myapp
+REDIS_URL=redis://redis.tailscale:6379
+SECRET_KEY_BASE=abc123...
+
+# .dockaroo/secrets.grabber01 — overrides for grabber01
+DATABASE_URL=postgres://user:password@db:5433/myapp?prepared_statements=false
+
+# .dockaroo/secrets.grabber02 — overrides for grabber02
+DATABASE_URL=postgres://user:password@db:5434/myapp?prepared_statements=false
+```
+
+### Merge order
+
+At deploy time, environment variables are merged in this order (later values override earlier):
+
+1. `.dockaroo/secrets` — base secrets
+2. `.dockaroo/secrets.{host}` — host-specific secret overrides
+3. `defaults.environment` — non-secret defaults from `.dockaroo.yml`
+4. `services.{service}.environment` — non-secret per-service values
+
+The merged secrets file is uploaded to each host (mode 0600) and passed to Docker via `--env-file`. Non-secret `environment` values from the YAML config are passed as `--env` flags.
+
+### What goes where
+
+| Type | Where | Example |
+|---|---|---|
+| Passwords, tokens, connection strings | `.dockaroo/secrets` | `DATABASE_URL`, `API_KEY` |
+| Host-specific secret overrides | `.dockaroo/secrets.{host}` | Different `DATABASE_URL` per host |
+| Non-secret config | `environment` in `.dockaroo.yml` | `MALLOC_ARENA_MAX`, `RAILS_ENV` |
+
+## Auto-injected Environment Variables
+
+Dockaroo injects these automatically into every container:
 
 | Variable | Description |
 |---|---|
@@ -127,5 +170,5 @@ Dockaroo injects these automatically:
 Dockaroo runs `docker login` on each host before pulling. Credentials come from:
 
 1. Environment variables: `DOCKAROO_REGISTRY_USERNAME` and `DOCKAROO_REGISTRY_PASSWORD`
-2. Config file (not recommended for secrets)
+2. `.dockaroo/secrets` (set `DOCKAROO_REGISTRY_USERNAME` and `DOCKAROO_REGISTRY_PASSWORD`)
 3. Interactive prompt
