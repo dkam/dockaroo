@@ -34,4 +34,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "lipgloss"
   spec.add_dependency "bubbles"
   spec.add_dependency "sshkit", ">= 1.23.0", "< 2.0"
+  spec.add_dependency "ed25519", "~> 1.4"
+  spec.add_dependency "bcrypt_pbkdf", "~> 1.0"
 end
