@@ -6,11 +6,9 @@ module Dockaroo
       TEMPLATE = <<~YAML
         # .dockaroo.yml
         project: myapp
-        registry: registry.example.com
-        image: myorg/myapp
-        tag: latest
 
         defaults:
+          image: registry.example.com/myorg/myapp:latest
           network: host
           restart: on-failure
           logging:
@@ -26,6 +24,11 @@ module Dockaroo
           #   cmd: bundle exec sidekiq
           #   hosts: [web01]
           #   replicas: 2
+          #
+          # caddy:
+          #   image: caddy:2-alpine
+          #   hosts: [web01]
+          #   ports: ["80:80", "443:443"]
       YAML
 
       SECRETS_TEMPLATE = <<~SECRETS

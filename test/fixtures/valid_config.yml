@@ -1,9 +1,8 @@
 project: booko
-registry: git.booko.info
-image: booko/booko
-tag: latest
 
 defaults:
+  image: git.booko.info/booko/booko:latest
+  remote_dir: ~/booko-services
   network: host
   restart: on-failure
   environment:

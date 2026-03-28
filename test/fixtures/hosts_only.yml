@@ -1,6 +1,4 @@
 project: testproject
-registry: registry.example.com
-image: myapp/myapp
 
 hosts:
   grabber01:

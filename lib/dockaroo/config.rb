@@ -36,24 +36,12 @@ module Dockaroo
       @raw["project"]
     end
 
-    def registry
-      @raw["registry"]
-    end
-
-    def image
-      @raw["image"]
-    end
-
-    def tag
-      @raw["tag"] || "latest"
-    end
-
     def defaults
       @raw["defaults"] || {}
     end
 
-    def full_image(tag: nil)
-      "#{registry}/#{image}:#{tag || self.tag}"
+    def default_image
+      defaults["image"]
     end
 
     def find_service(name)
@@ -122,6 +110,7 @@ module Dockaroo
 
         Service.new(
           name: name,
+          image: merged["image"],
           cmd: merged["cmd"],
           hosts: Array(merged["hosts"]),
           replicas: merged["replicas"] || 1,
@@ -129,7 +118,9 @@ module Dockaroo
           restart: merged["restart"],
           environment: merged["environment"] || {},
           volumes: Array(merged["volumes"]),
-          logging: logging
+          ports: Array(merged["ports"]),
+          logging: logging,
+          remote_dir: merged["remote_dir"] || "~"
         )
       end
     end

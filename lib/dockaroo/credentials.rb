@@ -8,7 +8,7 @@ module Dockaroo
 
     # Returns {username:, password:} or nil
     def resolve
-      from_env || from_secrets || from_prompt
+      from_env || from_secrets
     end
 
     private

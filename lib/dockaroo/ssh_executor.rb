@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "sshkit"
+require "stringio"
 
 module Dockaroo
   SSHResult = Data.define(:stdout, :stderr, :exit_status) do

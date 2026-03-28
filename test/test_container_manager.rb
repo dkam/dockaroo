@@ -22,6 +22,7 @@ class TestContainerManager < Minitest::Test
     grabber = @config.find_service("grabber")
     cmd = @manager.run_command(service: grabber, host_name: "grabber02", replica: 2)
 
+    assert cmd.start_with?("cd ~/booko-services && docker run")
     assert_includes cmd, "--name booko-grabber-2"
     assert_includes cmd, "--network host"
     assert_includes cmd, "--restart on-failure"
@@ -68,11 +69,9 @@ class TestContainerManager < Minitest::Test
   end
 
   def test_run_command_no_logging
-    # Build a config with no logging
     raw = {
       "project" => "test",
-      "registry" => "registry.example.com",
-      "image" => "myapp",
+      "defaults" => { "image" => "registry.example.com/myapp:latest" },
       "hosts" => { "host1" => nil },
       "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
     }
@@ -91,8 +90,7 @@ class TestContainerManager < Minitest::Test
   def test_run_command_no_network
     raw = {
       "project" => "test",
-      "registry" => "registry.example.com",
-      "image" => "myapp",
+      "defaults" => { "image" => "registry.example.com/myapp:latest" },
       "hosts" => { "host1" => nil },
       "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
     }
@@ -105,6 +103,98 @@ class TestContainerManager < Minitest::Test
     cmd = manager.run_command(service: worker, host_name: "host1")
 
     refute_includes cmd, "--network"
+  end
+
+  def test_run_command_with_ports
+    raw = {
+      "project" => "test",
+      "hosts" => { "host1" => nil },
+      "services" => {
+        "caddy" => {
+          "image" => "caddy:2-alpine",
+          "hosts" => ["host1"],
+          "ports" => ["80:80", "443:443"]
+        }
+      }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
+    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
+
+    caddy = config.find_service("caddy")
+    cmd = manager.run_command(service: caddy, host_name: "host1")
+
+    assert_includes cmd, "--publish 80:80"
+    assert_includes cmd, "--publish 443:443"
+    assert_includes cmd, "caddy:2-alpine"
+  end
+
+  def test_run_command_without_cmd
+    raw = {
+      "project" => "test",
+      "hosts" => { "host1" => nil },
+      "services" => {
+        "caddy" => {
+          "image" => "caddy:2-alpine",
+          "hosts" => ["host1"]
+        }
+      }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
+    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
+
+    caddy = config.find_service("caddy")
+    cmd = manager.run_command(service: caddy, host_name: "host1")
+
+    assert_includes cmd, "caddy:2-alpine"
+    # Command should end with the image, not a nil
+    refute_includes cmd, "nil"
+  end
+
+  def test_run_command_default_remote_dir
+    raw = {
+      "project" => "test",
+      "defaults" => { "image" => "registry.example.com/myapp:latest" },
+      "hosts" => { "host1" => nil },
+      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
+    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
+
+    worker = config.find_service("worker")
+    cmd = manager.run_command(service: worker, host_name: "host1")
+
+    assert cmd.start_with?("cd ~ && docker run")
+  end
+
+  def test_run_command_custom_remote_dir
+    raw = {
+      "project" => "test",
+      "defaults" => { "image" => "registry.example.com/myapp:latest", "remote_dir" => "~/my-services" },
+      "hosts" => { "host1" => nil },
+      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
+    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
+
+    worker = config.find_service("worker")
+    cmd = manager.run_command(service: worker, host_name: "host1")
+
+    assert cmd.start_with?("cd ~/my-services && docker run")
+  end
+
+  def test_run_command_no_image_raises
+    service = Dockaroo::Config::Service.new(name: "broken", cmd: "echo hi", hosts: ["host1"])
+    assert_raises(Dockaroo::ConfigError) do
+      @manager.run_command(service: service, host_name: "host1")
+    end
   end
 
   def test_stop_command
@@ -177,7 +267,6 @@ class TestContainerManagerRealData < Minitest::Test
 
   def test_parses_all_containers
     containers = parsed_containers
-    # 17 lines in fixture, all should parse (they all start with booko-)
     assert_equal 17, containers.size
   end
 
@@ -220,7 +309,6 @@ class TestContainerManagerRealData < Minitest::Test
     containers = parsed_containers
     kamal = containers.select { |c| c[:name].include?("462dd140f3") }
 
-    # These parse but with ugly service names — they're Kamal leftovers
     assert kamal.size > 0
     assert(kamal.all? { |c| c[:state] == "exited" })
   end

@@ -1,0 +1,38 @@
+project: booko
+
+defaults:
+  image: reg.tbdb.info/booko:latest
+  network: host
+  restart: on-failure
+
+hosts:
+  web01:
+    user: booko
+  grabber01:
+    user: booko
+
+services:
+  web:
+    cmd: bundle exec puma -C config/puma_docker.rb
+    hosts: [web01]
+
+  grabber:
+    cmd: bundle exec bin/booko -W -i1
+    hosts: [grabber01]
+    replicas: 4
+
+  caddy:
+    image: caddy:2-alpine
+    hosts: [web01]
+    network: bridge
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf:/etc/caddy
+      - caddy_data:/data
+
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    hosts: [web01]
+    network: host

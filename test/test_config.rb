@@ -91,7 +91,7 @@ class TestConfig < Minitest::Test
     end
   end
 
-  def test_save_preserves_unknown_keys
+  def test_save_preserves_project
     Dir.mktmpdir do |dir|
       path = File.join(dir, ".dockaroo.yml")
       FileUtils.cp(FIXTURE_PATH, path)
@@ -101,8 +101,6 @@ class TestConfig < Minitest::Test
 
       raw = YAML.safe_load_file(path)
       assert_equal "testproject", raw["project"]
-      assert_equal "registry.example.com", raw["registry"]
-      assert_equal "myapp/myapp", raw["image"]
     end
   end
 
@@ -110,6 +108,7 @@ class TestConfig < Minitest::Test
     config = Dockaroo::Config.new
     assert_nil config.find_host("nohost")
   end
+
 end
 
 class TestConfigServices < Minitest::Test
@@ -118,15 +117,13 @@ class TestConfigServices < Minitest::Test
   def test_top_level_accessors
     config = Dockaroo::Config.load(VALID_CONFIG)
     assert_equal "booko", config.project
-    assert_equal "git.booko.info", config.registry
-    assert_equal "booko/booko", config.image
-    assert_equal "latest", config.tag
+    assert_equal "git.booko.info/booko/booko:latest", config.default_image
   end
 
-  def test_full_image
+  def test_service_inherits_default_image
     config = Dockaroo::Config.load(VALID_CONFIG)
-    assert_equal "git.booko.info/booko/booko:latest", config.full_image
-    assert_equal "git.booko.info/booko/booko:abc123", config.full_image(tag: "abc123")
+    grabber = config.find_service("grabber")
+    assert_equal "git.booko.info/booko/booko:latest", grabber.image
   end
 
   def test_parse_services
@@ -163,14 +160,47 @@ class TestConfigServices < Minitest::Test
     assert_includes grabber.volumes, "./log:/rails/log"
   end
 
+  def test_remote_dir_inherited_from_defaults
+    config = Dockaroo::Config.load(VALID_CONFIG)
+    grabber = config.find_service("grabber")
+
+    assert_equal "~/booko-services", grabber.remote_dir
+  end
+
+  def test_remote_dir_defaults_to_home
+    raw = {
+      "project" => "test",
+      "defaults" => { "image" => "myapp:latest" },
+      "hosts" => { "host1" => nil },
+      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    worker = config.find_service("worker")
+
+    assert_equal "~", worker.remote_dir
+  end
+
+  def test_remote_dir_service_overrides_default
+    raw = {
+      "project" => "test",
+      "defaults" => { "image" => "myapp:latest", "remote_dir" => "~/default-dir" },
+      "hosts" => { "host1" => nil },
+      "services" => {
+        "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"], "remote_dir" => "~/custom-dir" }
+      }
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    worker = config.find_service("worker")
+
+    assert_equal "~/custom-dir", worker.remote_dir
+  end
+
   def test_environment_merged
     config = Dockaroo::Config.load(VALID_CONFIG)
     amazon = config.find_service("amazon")
 
-    # Has defaults env
     assert_equal "2", amazon.environment["MALLOC_ARENA_MAX"]
     assert_equal "1", amazon.environment["RUBY_YJIT_ENABLE"]
-    # Plus service-specific env
     assert_equal "true", amazon.environment["AMAZON_SPECIFIC"]
   end
 
@@ -178,8 +208,8 @@ class TestConfigServices < Minitest::Test
     config = Dockaroo::Config.load(VALID_CONFIG)
     amazon = config.find_service("amazon")
 
-    assert_includes amazon.volumes, "./log:/rails/log"    # from defaults
-    assert_includes amazon.volumes, "./data:/data"         # from service
+    assert_includes amazon.volumes, "./log:/rails/log"
+    assert_includes amazon.volumes, "./data:/data"
     assert_equal 2, amazon.volumes.size
   end
 
@@ -208,8 +238,62 @@ class TestConfigServices < Minitest::Test
     assert_equal [], config.services
   end
 
-  def test_default_tag
-    config = Dockaroo::Config.new(raw: { "image" => "myapp" })
-    assert_equal "latest", config.tag
+  def test_image_with_tag
+    service = Dockaroo::Config::Service.new(name: "web", image: "reg.tbdb.info/booko:latest")
+    assert_equal "reg.tbdb.info/booko:abc123", service.image_with_tag("abc123")
+  end
+
+  def test_image_with_tag_no_existing_tag
+    service = Dockaroo::Config::Service.new(name: "web", image: "caddy")
+    assert_equal "caddy:2-alpine", service.image_with_tag("2-alpine")
+  end
+
+  def test_image_with_tag_docker_hub
+    service = Dockaroo::Config::Service.new(name: "web", image: "caddy:2-alpine")
+    assert_equal "caddy:latest", service.image_with_tag("latest")
   end
 end
+
+class TestConfigMultiImage < Minitest::Test
+  MULTI_IMAGE_CONFIG = File.expand_path("fixtures/multi_image_config.yml", __dir__)
+
+  def test_service_overrides_default_image
+    config = Dockaroo::Config.load(MULTI_IMAGE_CONFIG)
+
+    caddy = config.find_service("caddy")
+    assert_equal "caddy:2-alpine", caddy.image
+
+    anubis = config.find_service("anubis")
+    assert_equal "ghcr.io/techarohq/anubis:latest", anubis.image
+  end
+
+  def test_service_inherits_default_image
+    config = Dockaroo::Config.load(MULTI_IMAGE_CONFIG)
+
+    web = config.find_service("web")
+    assert_equal "reg.tbdb.info/booko:latest", web.image
+
+    grabber = config.find_service("grabber")
+    assert_equal "reg.tbdb.info/booko:latest", grabber.image
+  end
+
+  def test_service_ports
+    config = Dockaroo::Config.load(MULTI_IMAGE_CONFIG)
+    caddy = config.find_service("caddy")
+
+    assert_equal ["80:80", "443:443"], caddy.ports
+  end
+
+  def test_service_without_cmd
+    config = Dockaroo::Config.load(MULTI_IMAGE_CONFIG)
+    caddy = config.find_service("caddy")
+
+    assert_nil caddy.cmd
+  end
+
+  def test_default_image_accessor
+    config = Dockaroo::Config.load(MULTI_IMAGE_CONFIG)
+    assert_equal "reg.tbdb.info/booko:latest", config.default_image
+  end
+end
+

@@ -11,6 +11,8 @@ module Dockaroo
 
     # Generate the full `docker run` command string
     def run_command(service:, host_name:, replica: nil, tag: nil, env_file_path: nil)
+      raise ConfigError, "Service '#{service.name}' has no image configured" unless service.image
+
       name = service.container_name(@config.project, replica)
       parts = ["docker run --detach"]
       parts << "--name #{name}"
@@ -26,16 +28,22 @@ module Dockaroo
         parts << "--volume #{vol}"
       end
 
+      service.ports.each do |port|
+        parts << "--publish #{port}"
+      end
+
       if service.logging
         parts << "--log-driver json-file"
         parts << "--log-opt max-size=#{service.logging[:max_size]}" if service.logging[:max_size]
         parts << "--log-opt max-file=#{service.logging[:max_file]}" if service.logging[:max_file]
       end
 
-      parts << @config.full_image(tag: tag)
-      parts << service.cmd
+      image = tag ? service.image_with_tag(tag) : service.image
+      parts << image
+      parts << service.cmd if service.cmd
 
-      parts.join(" \\\n  ")
+      docker_cmd = parts.join(" ")
+      "cd #{service.remote_dir} && #{docker_cmd}"
     end
 
     # Execute docker run on remote host

@@ -4,7 +4,8 @@ require "shellwords"
 
 module Dockaroo
   class Deployer
-    REMOTE_ENV_PATH = "~/.dockaroo/env"
+    REMOTE_ENV_DIR = ".dockaroo"
+    REMOTE_ENV_FILENAME = "env"
 
     def initialize(config:, env_builder:, container_manager:, credentials:)
       @config = config
@@ -16,7 +17,6 @@ module Dockaroo
     def deploy(tag: nil, host_filter: nil, service_filter: nil, skip_pull: false, &on_progress)
       hosts = resolve_hosts(host_filter)
       services = resolve_services(service_filter)
-      image = @config.full_image(tag: tag)
 
       hosts.each do |host|
         host_services = services.select { |s| s.hosts.include?(host.name) }
@@ -24,18 +24,35 @@ module Dockaroo
 
         executor = SSHExecutor.new(host: host.name, user: host.user, port: host.port)
 
-        report(on_progress, host: host.name, step: :login, detail: @config.registry)
-        registry_login(executor)
+        images_needed = host_services.map { |s| effective_image(s, tag) }.uniq
+        registries = images_needed.filter_map { |img| extract_registry(img) }.uniq
 
-        unless skip_pull
-          report(on_progress, host: host.name, step: :pull, detail: image)
-          executor.run("docker pull #{image}")
+        registries.each do |reg|
+          report(on_progress, host: host.name, step: :login, detail: reg)
+          registry_login(executor, reg)
         end
 
+        unless skip_pull
+          images_needed.each do |img|
+            report(on_progress, host: host.name, step: :pull, detail: img)
+            executor.run("docker pull #{img}")
+          end
+        end
+
+        remote_home = executor.run("echo $HOME").stdout.strip
+        env_dir = "#{remote_home}/#{REMOTE_ENV_DIR}"
+        env_file_path = "#{env_dir}/#{REMOTE_ENV_FILENAME}"
+
         report(on_progress, host: host.name, step: :upload_secrets)
-        upload_secrets(executor, host.name)
+        upload_secrets(executor, host.name, env_dir: env_dir, env_file_path: env_file_path)
+
+        host_services.map(&:remote_dir).uniq.each do |dir|
+          executor.run("mkdir -p #{dir}")
+        end
 
         host_services.each do |service|
+          service_tag = tag if tag && uses_default_image?(service)
+
           each_replica(service) do |replica|
             name = service.container_name(@config.project, replica)
 
@@ -48,7 +65,7 @@ module Dockaroo
             report(on_progress, host: host.name, step: :start, detail: name)
             @container_manager.start(
               service: service, host: host, replica: replica,
-              tag: tag, env_file_path: REMOTE_ENV_PATH
+              tag: service_tag, env_file_path: env_file_path
             )
           end
         end
@@ -57,19 +74,39 @@ module Dockaroo
 
     private
 
-    def registry_login(executor)
+    def registry_login(executor, registry)
       creds = @credentials.resolve
       return unless creds
 
       executor.run(
-        "echo #{Shellwords.escape(creds[:password])} | docker login #{@config.registry} -u #{Shellwords.escape(creds[:username])} --password-stdin"
+        "echo #{Shellwords.escape(creds[:password])} | docker login #{registry} -u #{Shellwords.escape(creds[:username])} --password-stdin"
       )
     end
 
-    def upload_secrets(executor, host_name)
+    def effective_image(service, tag)
+      if tag && uses_default_image?(service)
+        service.image_with_tag(tag)
+      else
+        service.image
+      end
+    end
+
+    def uses_default_image?(service)
+      default = @config.default_image
+      return false unless default
+
+      service.image.rpartition(":").first == default.rpartition(":").first
+    end
+
+    def extract_registry(image)
+      parts = image.split("/")
+      parts.size > 1 && parts.first.include?(".") ? parts.first : nil
+    end
+
+    def upload_secrets(executor, host_name, env_dir:, env_file_path:)
       content = @env_builder.secrets_file_content(host_name: host_name)
-      executor.run("mkdir -p ~/.dockaroo")
-      executor.upload(content, REMOTE_ENV_PATH, mode: "0600") unless content.empty?
+      executor.run("mkdir -p #{env_dir}")
+      executor.upload(content, env_file_path, mode: "0600")
     end
 
     def resolve_hosts(host_filter)
