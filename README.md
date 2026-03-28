@@ -44,14 +44,11 @@ Dockaroo uses a `.dockaroo.yml` file in the project root:
 
 ```yaml
 project: myapp
-registry: registry.example.com
-image: myapp/myapp
-tag: latest
 
 defaults:
+  image: registry.example.com/myorg/myapp:latest
   network: host
   restart: on-failure
-  env_file: .env
   environment:
     MALLOC_ARENA_MAX: "2"
   volumes:
@@ -75,6 +72,11 @@ services:
   scheduler:
     cmd: bundle exec bin/scheduler
     hosts: [worker01]
+
+  caddy:
+    image: caddy:2-alpine
+    hosts: [worker01]
+    ports: ["80:80", "443:443"]
 ```
 
 The `defaults` block sets values inherited by all services. Any service can override these.
@@ -134,16 +136,16 @@ Containers are named `{project}-{service}-{replica}`:
 
 ## Registry Authentication
 
-Dockaroo runs `docker login` on each host before pulling. Credentials come from:
+If credentials are configured, Dockaroo runs `docker login` on each host before pulling. Credentials come from:
 
 1. Environment variables: `DOCKAROO_REGISTRY_USERNAME` and `DOCKAROO_REGISTRY_PASSWORD`
-2. Config file
-3. Interactive prompt
+2. `.dockaroo/secrets` file
+
+If no credentials are configured, login is skipped — useful when hosts are pre-authenticated or pulling from public registries.
 
 ## What Dockaroo Does NOT Do
 
 - Build or push images — use your existing build pipeline
-- Manage Docker networks, volumes, or infrastructure
 - Service discovery or load balancing
 - Zero-downtime deploys (see [docs/design.md](docs/design.md) for rationale)
 - Replace Kubernetes, Nomad, or any serious orchestrator
