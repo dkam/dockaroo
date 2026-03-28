@@ -10,7 +10,7 @@
 | 2 | Host Checks | `dockaroo check` verifies Docker prerequisites on remote hosts | Done |
 | 3 | Configuration + Secrets | Service parsing, defaults merging, `.dockaroo/secrets` loading | Done |
 | 4 | Container Management | `docker run` command generation, status, start/stop/restart | Done |
-| 5 | Deploy Workflow | Full deploy pipeline including registry login/pull | |
+| 5 | Deploy Workflow | Full deploy pipeline including registry login/pull | Done |
 | 6 | Logs, Scaling | Log tailing, replica scaling, remaining commands | |
 | 7 | JSON Output | `--json` flag for machine-readable output (AI agents, scripts) | |
 

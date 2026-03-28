@@ -191,6 +191,5 @@ Dockaroo runs `docker login` on each host before pulling. It automatically detec
 
 1. Environment variables: `DOCKAROO_REGISTRY_USERNAME` and `DOCKAROO_REGISTRY_PASSWORD`
 2. `.dockaroo/secrets` (set `DOCKAROO_REGISTRY_USERNAME` and `DOCKAROO_REGISTRY_PASSWORD`)
-3. Interactive prompt
 
-Docker Hub images (e.g. `caddy:2-alpine`) don't require registry login.
+If no credentials are configured, login is skipped. Public registry images (e.g. `ghcr.io` public repos, Docker Hub `caddy:2-alpine`) work without authentication.

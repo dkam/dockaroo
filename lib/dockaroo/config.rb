@@ -67,10 +67,10 @@ module Dockaroo
     end
 
     def update_host(name, user: nil, port: nil)
-      host = find_host(name)
-      raise ConfigError, "Host not found: #{name}" unless host
+      idx = @hosts.index { |h| h.name == name }
+      raise ConfigError, "Host not found: #{name}" unless idx
 
-      idx = @hosts.index(host)
+      host = @hosts[idx]
       @hosts[idx] = Host.new(
         name: name,
         user: user || host.user,

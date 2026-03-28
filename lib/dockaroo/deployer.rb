@@ -4,8 +4,8 @@ require "shellwords"
 
 module Dockaroo
   class Deployer
-    REMOTE_ENV_DIR = ".dockaroo"
-    REMOTE_ENV_FILENAME = "env"
+    ENV_DIR_NAME = ".dockaroo"
+    ENV_FILENAME = "env"
 
     def initialize(config:, env_builder:, container_manager:, credentials:)
       @config = config
@@ -17,6 +17,7 @@ module Dockaroo
     def deploy(tag: nil, host_filter: nil, service_filter: nil, skip_pull: false, &on_progress)
       hosts = resolve_hosts(host_filter)
       services = resolve_services(service_filter)
+      creds = @credentials.resolve
 
       hosts.each do |host|
         host_services = services.select { |s| s.hosts.include?(host.name) }
@@ -27,9 +28,11 @@ module Dockaroo
         images_needed = host_services.map { |s| effective_image(s, tag) }.uniq
         registries = images_needed.filter_map { |img| extract_registry(img) }.uniq
 
-        registries.each do |reg|
-          report(on_progress, host: host.name, step: :login, detail: reg)
-          registry_login(executor, reg)
+        if creds
+          registries.each do |reg|
+            report(on_progress, host: host.name, step: :login, detail: reg)
+            registry_login(executor, reg, creds)
+          end
         end
 
         unless skip_pull
@@ -39,15 +42,12 @@ module Dockaroo
           end
         end
 
-        remote_home = executor.run("echo $HOME").stdout.strip
-        env_dir = "#{remote_home}/#{REMOTE_ENV_DIR}"
-        env_file_path = "#{env_dir}/#{REMOTE_ENV_FILENAME}"
-
-        report(on_progress, host: host.name, step: :upload_secrets)
-        upload_secrets(executor, host.name, env_dir: env_dir, env_file_path: env_file_path)
-
         host_services.map(&:remote_dir).uniq.each do |dir|
-          executor.run("mkdir -p #{dir}")
+          path = env_file_path(dir)
+          executor.run("mkdir -p #{env_dir_path(dir)}")
+
+          report(on_progress, host: host.name, step: :upload_secrets, detail: dir)
+          upload_secrets(executor, host.name, env_file_path: path)
         end
 
         host_services.each do |service|
@@ -65,7 +65,7 @@ module Dockaroo
             report(on_progress, host: host.name, step: :start, detail: name)
             @container_manager.start(
               service: service, host: host, replica: replica,
-              tag: service_tag, env_file_path: env_file_path
+              tag: service_tag, env_file_path: env_file_path(service.remote_dir)
             )
           end
         end
@@ -74,10 +74,7 @@ module Dockaroo
 
     private
 
-    def registry_login(executor, registry)
-      creds = @credentials.resolve
-      return unless creds
-
+    def registry_login(executor, registry, creds)
       executor.run(
         "echo #{Shellwords.escape(creds[:password])} | docker login #{registry} -u #{Shellwords.escape(creds[:username])} --password-stdin"
       )
@@ -98,14 +95,21 @@ module Dockaroo
       service.image.rpartition(":").first == default.rpartition(":").first
     end
 
+    def env_dir_path(remote_dir)
+      "#{remote_dir}/#{ENV_DIR_NAME}"
+    end
+
+    def env_file_path(remote_dir)
+      "#{env_dir_path(remote_dir)}/#{ENV_FILENAME}"
+    end
+
     def extract_registry(image)
       parts = image.split("/")
       parts.size > 1 && parts.first.include?(".") ? parts.first : nil
     end
 
-    def upload_secrets(executor, host_name, env_dir:, env_file_path:)
+    def upload_secrets(executor, host_name, env_file_path:)
       content = @env_builder.secrets_file_content(host_name: host_name)
-      executor.run("mkdir -p #{env_dir}")
       executor.upload(content, env_file_path, mode: "0600")
     end
 

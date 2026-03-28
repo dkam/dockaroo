@@ -80,7 +80,7 @@ Deploy workflow:
    b. Remove the old container(s)
    c. Start new container(s) with updated image
 
-### Logs
+### Logs (planned — Phase 6)
 
 ```bash
 # Tail logs from a service on a host
@@ -110,7 +110,11 @@ dockaroo start grabber
 
 # Restart a service (stop + start)
 dockaroo restart grabber
+```
 
+### Scale (planned — Phase 6)
+
+```bash
 # Scale replicas (updates config and applies)
 dockaroo scale grabber 6
 ```

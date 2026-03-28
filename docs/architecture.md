@@ -61,12 +61,12 @@ services:
 Generates (for replica 2 on grabber02):
 
 ```bash
-docker run \
+cd ~/booko-services && docker run \
   --detach \
   --name booko-grabber-2 \
   --network host \
   --restart on-failure \
-  --env-file .dockaroo/env/grabber02.env \
+  --env-file /home/booko/.dockaroo/env \
   --env MALLOC_ARENA_MAX=2 \
   --env DOCKAROO_PROJECT=booko \
   --env DOCKAROO_SERVICE=grabber \
@@ -80,19 +80,22 @@ docker run \
   bundle exec bin/booko -W
 ```
 
-The `--env-file` points to a secrets file uploaded to each host at deploy time (see Deploy Strategy). Non-secret `environment` values from `.dockaroo.yml` are passed as individual `--env` flags.
+The `cd` prefix sets the working directory so that relative volume paths (like `./log`) resolve from `remote_dir` (configured in defaults or per-service, defaults to `~`).
+
+The `--env-file` points to a secrets file uploaded to each host at deploy time (see Deploy Strategy). The path is resolved from `$HOME` on the remote host. Non-secret `environment` values from `.dockaroo.yml` are passed as individual `--env` flags.
 
 ## Deploy Strategy
 
 Dockaroo uses a simple stop-then-start strategy per service:
 
-1. Upload merged secrets file to host (`.dockaroo/env/{host}.env`, mode 0600)
-2. `docker login` + `docker pull` the image on each host
-3. For each service on each host, for each replica:
+1. Resolve `$HOME` on the remote host
+2. Upload merged secrets file to host (`$HOME/.dockaroo/env`, mode 0600)
+3. `docker login` + `docker pull` the image on each host
+4. Create `remote_dir` on host (`mkdir -p`)
+5. For each service on each host, for each replica:
    a. `docker stop {container}` (with timeout for graceful shutdown)
    b. `docker rm {container}`
-   c. `docker run ...` with new image
-4. Verify container is running
+   c. `cd {remote_dir} && docker run ...` with new image
 
 This means brief downtime per container during deploys. For worker processes pulling from a queue, this is acceptable — jobs wait in the queue for a few seconds while the container restarts. Other replicas (if any) continue processing throughout.
 

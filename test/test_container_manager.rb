@@ -69,61 +69,25 @@ class TestContainerManager < Minitest::Test
   end
 
   def test_run_command_no_logging
-    raw = {
-      "project" => "test",
-      "defaults" => { "image" => "registry.example.com/myapp:latest" },
-      "hosts" => { "host1" => nil },
-      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    worker = config.find_service("worker")
-    cmd = manager.run_command(service: worker, host_name: "host1")
+    _, manager = build_manager(services: { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } })
+    cmd = manager.run_command(service: find_service(manager, "worker"), host_name: "host1")
 
     refute_includes cmd, "--log-driver"
     refute_includes cmd, "--log-opt"
   end
 
   def test_run_command_no_network
-    raw = {
-      "project" => "test",
-      "defaults" => { "image" => "registry.example.com/myapp:latest" },
-      "hosts" => { "host1" => nil },
-      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    worker = config.find_service("worker")
-    cmd = manager.run_command(service: worker, host_name: "host1")
+    _, manager = build_manager(services: { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } })
+    cmd = manager.run_command(service: find_service(manager, "worker"), host_name: "host1")
 
     refute_includes cmd, "--network"
   end
 
   def test_run_command_with_ports
-    raw = {
-      "project" => "test",
-      "hosts" => { "host1" => nil },
-      "services" => {
-        "caddy" => {
-          "image" => "caddy:2-alpine",
-          "hosts" => ["host1"],
-          "ports" => ["80:80", "443:443"]
-        }
-      }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    caddy = config.find_service("caddy")
-    cmd = manager.run_command(service: caddy, host_name: "host1")
+    _, manager = build_manager(
+      services: { "caddy" => { "image" => "caddy:2-alpine", "hosts" => ["host1"], "ports" => ["80:80", "443:443"] } }
+    )
+    cmd = manager.run_command(service: find_service(manager, "caddy"), host_name: "host1")
 
     assert_includes cmd, "--publish 80:80"
     assert_includes cmd, "--publish 443:443"
@@ -131,61 +95,28 @@ class TestContainerManager < Minitest::Test
   end
 
   def test_run_command_without_cmd
-    raw = {
-      "project" => "test",
-      "hosts" => { "host1" => nil },
-      "services" => {
-        "caddy" => {
-          "image" => "caddy:2-alpine",
-          "hosts" => ["host1"]
-        }
-      }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    caddy = config.find_service("caddy")
-    cmd = manager.run_command(service: caddy, host_name: "host1")
+    _, manager = build_manager(
+      services: { "caddy" => { "image" => "caddy:2-alpine", "hosts" => ["host1"] } }
+    )
+    cmd = manager.run_command(service: find_service(manager, "caddy"), host_name: "host1")
 
     assert_includes cmd, "caddy:2-alpine"
-    # Command should end with the image, not a nil
     refute_includes cmd, "nil"
   end
 
   def test_run_command_default_remote_dir
-    raw = {
-      "project" => "test",
-      "defaults" => { "image" => "registry.example.com/myapp:latest" },
-      "hosts" => { "host1" => nil },
-      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    worker = config.find_service("worker")
-    cmd = manager.run_command(service: worker, host_name: "host1")
+    _, manager = build_manager(services: { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } })
+    cmd = manager.run_command(service: find_service(manager, "worker"), host_name: "host1")
 
     assert cmd.start_with?("cd ~ && docker run")
   end
 
   def test_run_command_custom_remote_dir
-    raw = {
-      "project" => "test",
-      "defaults" => { "image" => "registry.example.com/myapp:latest", "remote_dir" => "~/my-services" },
-      "hosts" => { "host1" => nil },
-      "services" => { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
-    }
-    config = Dockaroo::Config.new(raw: raw)
-    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
-    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
-    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
-
-    worker = config.find_service("worker")
-    cmd = manager.run_command(service: worker, host_name: "host1")
+    _, manager = build_manager(
+      defaults: { "image" => "registry.example.com/myapp:latest", "remote_dir" => "~/my-services" },
+      services: { "worker" => { "cmd" => "ruby worker.rb", "hosts" => ["host1"] } }
+    )
+    cmd = manager.run_command(service: find_service(manager, "worker"), host_name: "host1")
 
     assert cmd.start_with?("cd ~/my-services && docker run")
   end
@@ -240,6 +171,26 @@ class TestContainerManager < Minitest::Test
     end
 
     assert_equal [], containers
+  end
+
+  private
+
+  def build_manager(defaults: { "image" => "registry.example.com/myapp:latest" }, services: {})
+    raw = {
+      "project" => "test",
+      "defaults" => defaults,
+      "hosts" => { "host1" => nil },
+      "services" => services
+    }
+    config = Dockaroo::Config.new(raw: raw)
+    secrets = Dockaroo::Secrets.new(base_dir: @tmpdir)
+    env_builder = Dockaroo::EnvBuilder.new(config: config, secrets: secrets)
+    manager = Dockaroo::ContainerManager.new(config: config, env_builder: env_builder)
+    [config, manager]
+  end
+
+  def find_service(manager, name)
+    manager.instance_variable_get(:@config).find_service(name)
   end
 end
 
